@@ -80,7 +80,11 @@ Param (
     $MemoryMiB
 )
 begin {
-
+     
+    if (-not (which unar)) {
+        throw "This script requires the program, unar, which is a single archive decompression tool that works on a variety or archive types.`nPlease install that program and re-run the script."
+    }
+    
     function Find-VMDK ($Directory) {
         
         $files = Get-ChildItem $Directory -Recurse

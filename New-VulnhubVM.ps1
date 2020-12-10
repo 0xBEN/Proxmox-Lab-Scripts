@@ -114,7 +114,7 @@ begin {
 
     }
     
-    if (-not ([System.IO.Path]::EndsInDirectorySeparator($DownloadDirectory)) {
+    if (-not [System.IO.Path]::EndsInDirectorySeparator($DownloadDirectory)) {
         $DownloadDirectory = $DownloadDirectory + '/'
     }
 

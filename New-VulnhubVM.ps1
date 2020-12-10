@@ -113,17 +113,21 @@ begin {
         }
 
     }
+    
+    if (-not ([System.IO.Path]::EndsInDirectorySeparator($DownloadDirectory)) {
+        $DownloadDirectory = $DownloadDirectory + '/'
+    }
 
 }
 process {
 
     $fileName = $VulnhubURI.Segments[-1] # Define the download file name based on the URI provided.
     if ($fileName -like '*.iso') { throw "Creating VMs from ISO files not yet implemented." }
-    $downloadPath = "$DownloadDirectory/$fileName"
+    $downloadPath = $DownloadDirectory + $fileName
     Write-Host "Downloading VM from Vulnhub. Please be patient..." -ForegroundColor Green
     wget $VulnhubURI.ToString() -q --show-progress -O $downloadPath
     $downloadedVM = Get-ChildItem $downloadPath
-    $archiveOutputDirectory = "$DownloadDirectory/temp$(Get-Random)"
+    $archiveOutputDirectory = $DownloadDirectory + "temp$(Get-Random)"
     try {
         unar $downloadedVM.FullName -o $archiveOutputDirectory
     }

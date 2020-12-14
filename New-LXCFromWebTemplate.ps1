@@ -131,7 +131,7 @@ process {
         Write-Host "Command executed successfully." -ForegroundColor Green
     }
     catch {
-        throw "qm create failed:`n$_"
+        throw "pct create failed:`n$_"
     }
 
 }

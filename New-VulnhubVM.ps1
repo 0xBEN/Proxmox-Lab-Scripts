@@ -114,20 +114,25 @@ begin {
 
     }
     
-    if (-not [System.IO.Path]::EndsInDirectorySeparator($DownloadDirectory)) {
-        $DownloadDirectory = $DownloadDirectory + '/'
-    }
-
-}
-process {
-
+    if (-not [System.IO.Path]::EndsInDirectorySeparator($DownloadDirectory)) { $DownloadDirectory = $DownloadDirectory + '/'  }
     $fileName = $VulnhubURI.Segments[-1] # Define the download file name based on the URI provided.
     if ($fileName -like '*.iso') { throw "Creating VMs from ISO files not yet implemented." }
     $downloadPath = $DownloadDirectory + $fileName
+    $archiveOutputDirectory = $DownloadDirectory + "temp$(Get-Random)"
+    $parameterCollection = @()
+    $parameterCollection += "--ostype $GuestOSType"
+    $parameterCollection += "--storage $VMDiskStorageVolume"
+    if ($PSBoundParameters['NetworkBridge']) { $paramterCollection += "--net0 bridge=$NetworkBridge" }
+    if ($PSBoundParameters['VMName']) { $paramterCollection += "--name $VMName" }
+    if ($PSBoundParameters['MemoryMiB']) { $paramterCollection += "--memory $MemoryMiB" }        
+    $parameterString = $parameterCollection -join ' '    
+    
+}
+process {
+
     Write-Host "Downloading VM from Vulnhub. Please be patient..." -ForegroundColor Green
     wget $VulnhubURI.ToString() -q --show-progress -O $downloadPath
     $downloadedVM = Get-ChildItem $downloadPath
-    $archiveOutputDirectory = $DownloadDirectory + "temp$(Get-Random)"
     try {
         unar $downloadedVM.FullName -o $archiveOutputDirectory
     }
@@ -143,28 +148,40 @@ process {
         throw $_
     }
 
-    Write-Host "Creating a VM using <qm create> with the following parameters:" -ForegroundColor Green
-    Write-Host "ID: $VMID"
-    Write-Host "Name: $VMName"
-    qm create $VMID --net0 virtio,bridge=$NetworkBridge --name $VMName --ostype $GuestOSType `
-        --memory $MemoryMiB --bootdisk scsi0 --scsihw lsi > /dev/null
+    try {
+        $parameterString = $parameterCollection -join ' '
 
-    Write-Host "Importing the disk $($vmDisk.FullName) into storage volume: $VMDiskStorageVolume." -ForegroundColor Green
-    qm importdisk $VMID $vmDisk.FullName $VMDiskStorageVolume --format vmdk > /dev/null
-    Start-Sleep 2
+        Write-Host "Attempting to create the VM with the following command: qm create $VMID $parameterString." -ForegroundColor Green
+        Start-Process qm -ArgumentList "create $VMID $parameterString" -Wait -RedirectStandardOutput /dev/null
 
-    Write-Host "Attaching the disk $($VMDiskStorageVolume):vm-$VMID-disk-0 to scsi0." -ForegroundColor Green
-    qm set $VMID --scsi0 "$($VMDiskStorageVolume):vm-$VMID-disk-0" > /dev/null
+        Write-Host "Attempting to import the VMDK file as a disk." -ForegroundColor Green
+        Start-Process qm -ArgumentList "importdisk $VMID $($vmdisk.FullName) $VMDiskStorageVolume --format vmdk" -Wait -RedirectStandardOutput /dev/null
 
-    Write-Host "Setting boot order to: scsi0, net0." -ForegroundColor Green
-    qm set $VMID --boot="order=scsi0;net0" > /dev/null
+        Write-Host "Attempting to set the imported disk as the VM primary SCSI boot disk." -ForegroundColor Green
+        Start-Process qm -ArgumentList "set $VMID --scsi0 $($VMDiskStorageVolume):vm-$VMID-disk-0" -Wait -RedirectStandardOutput /dev/null
 
-    Write-Host "All commands completed successfully. Attempting to start VM." -ForegroundColor Green
-    qm start $VMID > /dev/null
+        if ($PSBoundParameters['NetworkBridge']) {
+            Write-Host "Attempting to set boot order to scsi0,net0." -ForegroundColor Green
+            Start-Process qm -ArgumentList "set $VMID --boot=`"order=scsi0;net0`"" -Wait -RedirectStandardOutput /dev/null
+        }
+        else {
+            Write-Host "Setting scsi0 as the boot device." -ForegroundColor Green
+            Start-Process qm -ArgumentList "set $VMID --boot=`"order=scsi0`"" -Wait -RedirectStandardOutput /dev/null
+        }
 
-    Write-Host "Cleaning up any files in $archiveOutputDirectory." -ForegroundColor Yellow
-    Start-Sleep 2
-    Remove-Item $downloadPath -Force
-    Remove-Item $archiveOutputDirectory -Recurse -Force
+        Write-Host "All commands completed successfully" -ForegroundColor Green
+    }
+    catch {
+        throw "Command failed with the following error:`n$_"
+    }
+
+}
+end {
+
+    if ((Test-Path $downloadPath -ErrorAction SilentlyContinue) -or (Test-Path $archiveOutputDirectory -ErrorAction SilentlyContinue)) {
+        Write-Host "Removing any files created by the script." -ForegroundColor Green
+        Remove-Item $downloadPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null   
+        Remove-Item $archiveOutputDirectory -Recurse -Force -ErrorAction SilentlyContinue | Out-Null   
+    }
 
 }

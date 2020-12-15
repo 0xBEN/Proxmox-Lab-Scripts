@@ -127,7 +127,7 @@ process {
     
     Write-Host "Attempting to create the container with the following command: pct create $ContainerID $downloadPath $parameterString" -ForegroundColor Green
     try {
-        Start-Process pct -ArgumentList "create $ContainerID $downloadPath $parameterString" -Wait
+        Start-Process pct -ArgumentList "create $ContainerID $downloadPath $parameterString" -Wait -RedirectStandardOut /dev/null
         Write-Host "Command executed successfully." -ForegroundColor Green
     }
     catch {

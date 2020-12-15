@@ -88,7 +88,7 @@ Param (
     $Hostname,
 
     [Parameter(HelpMessage = 'Example: 2048')]
-    [ValidateScript({$MemoryMiB -ge 16})]
+    [ValidateScript({$_ -ge 16})]
     [Int]
     $MemoryMiB,
 

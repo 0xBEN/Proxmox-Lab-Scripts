@@ -1,4 +1,4 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = '__AllParameterSets')]
 Param (
     [Parameter(Mandatory = $true)]
     [ValidateScript({
@@ -11,6 +11,18 @@ Param (
     })]
     [System.Uri]
     $ImageURI,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateScript({ 
+        if (-not (Test-Path $_)) {
+            throw "Path does not exist: $_"
+        }
+        else {
+            return $true
+        }
+    })]
+    [String]
+    $DownloadDirectory,
 
     [Parameter(Mandatory = $true)]
     [ValidateScript({
@@ -29,6 +41,7 @@ Param (
     [Int]
     $ContainerID,
 
+    [Parameter(ParameterSetName = 'Password', Mandatory = $true)]
     [Parameter()]
     [Switch]
     $SetRootPassword,
@@ -36,8 +49,9 @@ Param (
     [Parameter()]
     [ValidateSet('console', 'shell', 'tty')]
     [String]
-    $DefaultConsole = 'tty',
+    $DefaultConsole = 'tty',    
 
+    [Parameter(ParameterSetName = 'Password', Mandatory = $true)]
     [Parameter()]
     [ValidateNotNullOrEmpty()]
     [String]
@@ -97,10 +111,10 @@ Param (
     $StartOnCreate = $false
 )
 begin {
-
-    $templateStorage = '/var/lib/vz/template/cache'
+    
+    if (-not [System.IO.Path]::EndsInDirectorySeparator($DownloadDirectory)) { $DownloadDirectory = $DownloadDirectory + '/'  }
     $fileName = $ImageURI.Segments[-1] -replace 'rootfs', $Hostname
-    $downloadPath = $templateStorage + '/' + $fileName
+    $downloadPath = $DownloadDirectory + $fileName
     $parameterCollection = @()
     $parameterCollection += "--storage $ContainerDiskStorageVolume"
     $parameterCollection += "--net0 name=eth0,bridge=$NetworkBridge"
@@ -110,7 +124,7 @@ begin {
     if ($PSBoundParameters['SSHPublicKey']) { 
         $sshPublicKeysFile = "/tmp/$fileName-pubkeys"
         touch $sshPublicKeysFile
-        $SSHPublicKey > $sshPublicKeysFile
+        $SSHPublicKey | Out-File -FilePath $sshPublicKeysFile -Encoding utf8
         $parameterCollection += "--ssh-public-keys $sshPublicKeysFile" 
     }
     if ($PSBoundParameters['ContainerOSType']) { $parameterCollection += "--ostype $ContainerOSType" }
@@ -127,7 +141,12 @@ process {
     
     Write-Host "Attempting to create the container with the following command: pct create $ContainerID $downloadPath $parameterString" -ForegroundColor Green
     try {
-        Start-Process pct -ArgumentList "create $ContainerID $downloadPath $parameterString" -Wait -RedirectStandardOut /dev/null
+        if ($SetRootPassword.IsPresent) { # Don't redirect stdout. User should be prompted to set root user password
+            Start-Process pct -ArgumentList "create $ContainerID $downloadPath $parameterString" -Wait
+        }
+        else { # Silence stdout
+            Start-Process pct -ArgumentList "create $ContainerID $downloadPath $parameterString" -Wait -RedirectStandardOut /dev/null
+        }
         Write-Host "Command executed successfully." -ForegroundColor Green
     }
     catch {

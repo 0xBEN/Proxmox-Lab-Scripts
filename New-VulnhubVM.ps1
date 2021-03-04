@@ -122,9 +122,9 @@ begin {
     $parameterCollection = @()
     $parameterCollection += "--ostype $GuestOSType"
     $parameterCollection += "--storage $VMDiskStorageVolume"
-    if ($PSBoundParameters['NetworkBridge']) { $paramterCollection += "--net0 bridge=$NetworkBridge" }
-    if ($PSBoundParameters['VMName']) { $paramterCollection += "--name $VMName" }
-    if ($PSBoundParameters['MemoryMiB']) { $paramterCollection += "--memory $MemoryMiB" }        
+    if ($PSBoundParameters['NetworkBridge']) { $parameterCollection += "--net0 bridge=$NetworkBridge" }
+    if ($PSBoundParameters['VMName']) { $parameterCollection += "--name $VMName" }
+    if ($PSBoundParameters['MemoryMiB']) { $parameterCollection += "--memory $MemoryMiB" }        
     $parameterString = $parameterCollection -join ' '    
     
 }
@@ -149,8 +149,6 @@ process {
     }
 
     try {
-        $parameterString = $parameterCollection -join ' '
-
         Write-Host "Attempting to create the VM with the following command: qm create $VMID $parameterString." -ForegroundColor Green
         Start-Process qm -ArgumentList "create $VMID $parameterString" -Wait -RedirectStandardOutput /dev/null
 

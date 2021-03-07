@@ -70,6 +70,11 @@ Param (
     [String]
     $NetworkBridge,
 
+    [Parameter(HelpMessage = 'Enter an integer between 0 and 4094')]
+    [ValidateRange(0,4094)]
+    [Int]
+    $VlanTag,
+
     [Parameter(HelpMessage = 'Strictly for administrative purposes only.')]
     [ValidateNotNullOrEmpty()]
     [String]
@@ -122,7 +127,14 @@ begin {
     $parameterCollection = @()
     $parameterCollection += "--ostype $GuestOSType"
     $parameterCollection += "--storage $VMDiskStorageVolume"
-    if ($PSBoundParameters['NetworkBridge']) { $parameterCollection += "--net0 bridge=$NetworkBridge" }
+    if ($PSBoundParameters['NetworkBridge']) { 
+        if ($PSBoundParameters['VlanTag']) {
+            $parameterCollection += "--net0 model=virtio,bridge=$NetworkBridge,firewall=0,tag=$VlanTag"         
+        }
+        else {
+            $parameterCollection += "--net0 model=virtio,bridge=$NetworkBridge,firewall=0" 
+        }
+    }
     if ($PSBoundParameters['VMName']) { $parameterCollection += "--name $VMName" }
     if ($PSBoundParameters['MemoryMiB']) { $parameterCollection += "--memory $MemoryMiB" }        
     $parameterString = $parameterCollection -join ' '    
@@ -156,6 +168,7 @@ process {
         Start-Process qm -ArgumentList "importdisk $VMID $($vmdisk.FullName) $VMDiskStorageVolume --format vmdk" -Wait -RedirectStandardOutput /dev/null
 
         Write-Host "Attempting to set the imported disk as the VM primary SCSI boot disk." -ForegroundColor Green
+        Write-Host "Running command: qm set $VMID --scsi0 $($VMDiskStorageVolume):vm-$VMID-disk-0" -ForegroundColor Green
         Start-Process qm -ArgumentList "set $VMID --scsi0 $($VMDiskStorageVolume):vm-$VMID-disk-0" -Wait -RedirectStandardOutput /dev/null
 
         if ($PSBoundParameters['NetworkBridge']) {

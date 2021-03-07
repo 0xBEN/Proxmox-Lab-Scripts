@@ -154,6 +154,8 @@ process {
     
     try {
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
+        $vmDisk | ForEach-Object { Move-Item $_.FullName ($_.FullName -replace ' ', '_') } # Arbitrarily try to remove any whitespace in file path, as this has been an issue before
+        $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks
     }
     catch {
         Get-Item $downloadPath, $archiveOutputDirectory | Remove-Item -Recurse -Force # Clean up any artifacts after error.
@@ -164,21 +166,23 @@ process {
         Write-Host "Attempting to create the VM with the following command: qm create $VMID $parameterString." -ForegroundColor Green
         Start-Process qm -ArgumentList "create $VMID $parameterString" -Wait -RedirectStandardOutput /dev/null
 
-        Write-Host "Attempting to import the VMDK file as a disk." -ForegroundColor Green
-        Start-Process qm -ArgumentList "importdisk $VMID $($vmdisk.FullName) $VMDiskStorageVolume --format vmdk" -Wait -RedirectStandardOutput /dev/null
-
-        Write-Host "Attempting to set the imported disk as the VM primary SCSI boot disk." -ForegroundColor Green
-        Write-Host "Running command: qm set $VMID --scsi0 $($VMDiskStorageVolume):vm-$VMID-disk-0" -ForegroundColor Green
-        Start-Process qm -ArgumentList "set $VMID --scsi0 $($VMDiskStorageVolume):vm-$VMID-disk-0" -Wait -RedirectStandardOutput /dev/null
-
-        if ($PSBoundParameters['NetworkBridge']) {
-            Write-Host "Attempting to set boot order to scsi0,net0." -ForegroundColor Green
-            Start-Process qm -ArgumentList "set $VMID --boot=`"order=scsi0;net0`"" -Wait -RedirectStandardOutput /dev/null
+        Write-Host "Attempting to import the VMDK file(s) as a disk." -ForegroundColor Green
+        $vmDisk | ForEach-Object {
+            $disk = $_
+            Write-Host "Running command: qm importdisk $VMID $($disk.FullName) $VMDiskStorageVolume --format vmdk" -ForegroundColor Green
+            Start-Process qm -ArgumentList "importdisk $VMID $($disk.FullName) $VMDiskStorageVolume --format vmdk" -Wait -RedirectStandardOutput /dev/null
         }
-        else {
-            Write-Host "Setting scsi0 as the boot device." -ForegroundColor Green
-            Start-Process qm -ArgumentList "set $VMID --boot=`"order=scsi0`"" -Wait -RedirectStandardOutput /dev/null
+
+        $iteration = 0
+        $vmDisk | ForEach-Object {
+            Write-Host "Attempting to attach the disk to the VM's SCSI controller." -ForegroundColor Green
+            Write-Host "Running command: qm set $VMID --scsi$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -ForegroundColor Green
+            Start-Process qm -ArgumentList "set $VMID --scsi$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -Wait -RedirectStandardOutput /dev/null
+            $iteration++
         }
+
+        Write-Host "Setting scsi0 as the boot device." -ForegroundColor Green
+        Start-Process qm -ArgumentList "set $VMID --boot=`"order=scsi0`"" -Wait -RedirectStandardOutput /dev/null
 
         Write-Host "All commands completed successfully" -ForegroundColor Green
     }
@@ -196,3 +200,4 @@ end {
     }
 
 }
+ 

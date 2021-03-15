@@ -175,14 +175,14 @@ process {
 
         $iteration = 0
         $vmDisk | ForEach-Object {
-            Write-Host "Attempting to attach the disk to the VM's SCSI controller." -ForegroundColor Green
-            Write-Host "Running command: qm set $VMID --scsi$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -ForegroundColor Green
-            Start-Process qm -ArgumentList "set $VMID --scsi$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -Wait -RedirectStandardOutput /dev/null
+            Write-Host "Attempting to attach the disk to the VM's SATA controller." -ForegroundColor Green
+            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -ForegroundColor Green
+            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -Wait -RedirectStandardOutput /dev/null
             $iteration++
         }
 
-        Write-Host "Setting scsi0 as the boot device." -ForegroundColor Green
-        Start-Process qm -ArgumentList "set $VMID --boot=`"order=scsi0`"" -Wait -RedirectStandardOutput /dev/null
+        Write-Host "Setting sata0 as the boot device." -ForegroundColor Green
+        Start-Process qm -ArgumentList "set $VMID --boot=`"order=sata0`"" -Wait -RedirectStandardOutput /dev/null
 
         Write-Host "All commands completed successfully" -ForegroundColor Green
     }

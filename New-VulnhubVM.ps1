@@ -153,8 +153,11 @@ process {
     }
     
     try {
-        Get-ChildItem $archiveOutputDirectory -Recurse | ForEach-Object {# Arbitrarily try to remove any whitespace in file path, as this has been an issue before
-            Move-Item $_.FullName ($_.FullName -replace ' ', '_') 
+        Get-ChildItem $archiveOutputDirectory -Recurse | ForEach-Object { # Arbitrarily try to remove any whitespace in file path, as this has been an issue before
+	   $removeWhiteSpace = $_.FullName -replace ' ', '_'
+           if ($removeWhiteSpace -ne $_.FullName) {
+               Move-Item $_.FullName $removeWhiteSpace
+           }
         }
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks

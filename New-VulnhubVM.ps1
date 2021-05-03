@@ -100,7 +100,7 @@ begin {
                 $type = (file $file.FullName) -split ' '
                 $isArchive = $type[2] -eq 'archive'
                 if ($isArchive) {
-                    Write-Host $isArchive.FullName -ForegroundColor Green
+                    Write-Host $file.FullName -ForegroundColor Green
                     $archiveFileFound = $file
                 }
             }

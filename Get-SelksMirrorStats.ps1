@@ -4,6 +4,8 @@ $ProgressPreference = 'SilentlyContinue'
 $selksLogDir = '/var/log/SELKS/'
 $selksLog = $selksLogDir + 'selkslog.txt'
 $statCache = $selksLogDir + 'cache.clixml'
+$tap1Name = 'tap103i1' # Modify as needed based on VM ID
+$tap2Name = 'tap103i2' # Modify as needed based on VM ID
 $span0Name = 'selksCyberRange'
 $span1Name = 'selksProd'
 $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'selks*'
@@ -20,8 +22,8 @@ if (-not (Test-Path $statCache)) {
 
 if ($mirrorStats.count -lt 2) {
     # Recreate the mirrors and refresh data since there should always be a minimum of two
-    ovs-vsctl -- --id=@p get port tap102i1 -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge vmbr1 mirrors=@m | Out-Null
-    ovs-vsctl -- --id=@p get port tap102i2 -- --id=@m create mirror name=$span1Name select-all=true output-port=@p -- set bridge vmbr0 mirrors=@m | Out-Null
+    ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge vmbr1 mirrors=@m | Out-Null
+    ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=$span1Name select-all=true output-port=@p -- set bridge vmbr0 mirrors=@m | Out-Null
     Start-Sleep -Seconds 5
     $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv
     if ($mirrorStats.Count -lt 2) {
@@ -37,10 +39,10 @@ else {
         $mirrorStats | Export-Clixml $statCache -Force
     }
     else {
-        $currentSpan0 = $mirrorStats | Where-Object {$_.name -eq `""$span0Name"`"}
-        $currentSpan1 = $mirrorStats | Where-Object {$_.name -eq `""$span1Name"`"}
-        $cacheSpan0 = $cacheStats | Where-Object {$_.name -eq `""$span0Name"`"}
-        $cacheSpan1 = $cacheStats | Where-Object {$_.name -eq `""$span1Name"`"}
+        $currentSpan0 = $mirrorStats | Where-Object {$_.name -match $span0Name}
+        $currentSpan1 = $mirrorStats | Where-Object {$_.name -match $span1Name}
+        $cacheSpan0 = $cacheStats | Where-Object {$_.name -match $span0Name}
+        $cacheSpan1 = $cacheStats | Where-Object {$_.name -match $span1Name}
         $currentSpan0txData = $currentSpan0.statistics -replace '{' -replace '}' -split ', ' | ConvertFrom-StringData
         $currentSpan1txData = $currentSpan1.statistics -replace '{' -replace '}' -split ', ' | ConvertFrom-StringData
         $cacheSpan0txData = $cacheSpan0.statistics -replace '{' -replace '}' -split ', ' | ConvertFrom-StringData
@@ -52,8 +54,8 @@ else {
         }
         else {
             Write-Output 'Recreated mirrors as current span TX data was equal to or older than that in the cache.' > $selksLog
-            ovs-vsctl -- --id=@p get port tap102i1 -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge vmbr1 mirrors=@m | Out-Null
-            ovs-vsctl -- --id=@p get port tap102i2 -- --id=@m create mirror name=span1Name select-all=true output-port=@p -- set bridge vmbr0 mirrors=@m | Out-Null
+            ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge vmbr1 mirrors=@m | Out-Null
+            ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=span1Name select-all=true output-port=@p -- set bridge vmbr0 mirrors=@m | Out-Null
             Start-Sleep -Seconds 5
 	    $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv
 	    $mirrorStats | Export-Clixml $statCache -Force

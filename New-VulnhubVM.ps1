@@ -100,7 +100,8 @@ begin {
                 $type = (file $file.FullName) -split ' '
                 $isArchive = $type[2] -eq 'archive'
                 if ($isArchive) {
-                    Write-Host $file.FullName -ForegroundColor Green
+                    Write-Host "Nested archive found: " -NoNewLine
+		    Write-Host $file.FullName -ForegroundColor Green
                     $archiveFileFound = $file
                 }
             }

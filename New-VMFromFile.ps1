@@ -165,18 +165,27 @@ process {
         Write-Host "Attempting to create the VM with the following command: qm create $VMID $parameterString." -ForegroundColor Green
         Start-Process qm -ArgumentList "create $VMID $parameterString" -Wait -RedirectStandardOutput /dev/null
 
-        Write-Host "Attempting to import the VMDK file(s) as a disk." -ForegroundColor Green
+        Write-Host "Attempting to convert the VMDK file(s) to QCOW2 to support snapshots." -ForegroundColor Green
+        $qcow2Disks = @()
         $vmDisk | ForEach-Object {
+            $vmdkfile = $_
+            $qcow2file = $vmdkfile.FullName -replace 'vmdk', 'qcow2'
+            $qcow2Disks += $qcow2file
+            Start-Process qemu-img -ArgumentList "convert -f vmdk -O qcow2 $($vmdkfile.FullName) $qcow2file" -Wait
+        }
+
+        Write-Host "Attempting to import the QCOW2 file(s) as a disk." -ForegroundColor Green
+        $qcow2Disks | ForEach-Object {
             $disk = $_
-            Write-Host "Running command: qm importdisk $VMID $($disk.FullName) $VMDiskStorageVolume --format vmdk" -ForegroundColor Green
-            Start-Process qm -ArgumentList "importdisk $VMID $($disk.FullName) $VMDiskStorageVolume --format vmdk" -Wait -RedirectStandardOutput /dev/null
+            Write-Host "Running command: qm importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -ForegroundColor Green
+            Start-Process qm -ArgumentList "importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -Wait -RedirectStandardOutput /dev/null
         }
 
         $iteration = 0
-        $vmDisk | ForEach-Object {
+        $qcowDisks | ForEach-Object {
             Write-Host "Attempting to attach the disk to the VM's SATA controller." -ForegroundColor Green
-            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.vmdk" -ForegroundColor Green
-            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.vmdk" -Wait -RedirectStandardOutput /dev/null
+            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.qcow2" -ForegroundColor Green
+            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.qcow2" -Wait -RedirectStandardOutput /dev/null
             $iteration++
         }
 

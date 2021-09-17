@@ -181,7 +181,7 @@ process {
         Write-Host "Attempting to create the VM with the following command: qm create $VMID $parameterString." -ForegroundColor Green
         Start-Process qm -ArgumentList "create $VMID $parameterString" -Wait -RedirectStandardOutput /dev/null
 
-        Write-Host "Attempting to import the VMDK file(s) as a disk." -ForegroundColor Green
+        Write-Host "Attempting to import the QCOW2 file(s) as a disk." -ForegroundColor Green
         $qcow2Disks | ForEach-Object {
             $disk = $_
             Write-Host "Running command: qm importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -ForegroundColor Green

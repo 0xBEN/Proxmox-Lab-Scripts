@@ -85,8 +85,8 @@ begin {
         if (-not $vmdk) {
             $files | ForEach-Object {
                 $file = $_
-                $type = (file $file.FullName) -split ' '
-                $isArchive = $type[-1] -eq 'archive'
+                $type = file $file.FullName
+                $isArchive = $type -like '*archive*' -or $type -like '*compressed*'
                 if ($isArchive) {
                     Write-Host $isArchive.FullName -ForegroundColor Green
                     $archiveFileFound = $file
@@ -109,7 +109,8 @@ begin {
    
     $FilePath = Resolve-Path $FilePath # In case a relative path is specified 
     if ($FilePath -like '*.iso') { throw "Creating VMs from ISO files not yet implemented." }
-    $archiveOutputDirectory = $FilePath + "-temp$(Get-Random)"
+    elseif ($FilePath -like '*.vmdk') { $gotVmdk = $true }    
+    else { $archiveOutputDirectory = $FilePath + "-temp$(Get-Random)" }
     $parameterCollection = @()
     $parameterCollection += "--ostype $GuestOSType"
     $parameterCollection += "--storage $VMDiskStorageVolume"
@@ -128,28 +129,36 @@ begin {
 }
 process {
 
-    try {
-	Write-Host "Extracting files to $archiveOutputDirectory" -ForegroundColor Green
-        unar $FilePath -o $archiveOutputDirectory
-    }
-    catch {
-        throw "Error expanding archive:`n$_"
-    }
-    
-    try {
-        Get-ChildItem $archiveOutputDirectory -Recurse | 
-	ForEach-Object {# Arbitrarily try to remove any whitespace in file path, as this has been an issue before
-           $removeWhiteSpace = $_.FullName -replace ' ', '_'
-	   if ($removeWhiteSpace -ne $_.FullName) {
-	       Move-Item $_.FullName $removeWhiteSpace
-	   }
+    if (-not $gotVmdk) {
+
+	try {
+	    Write-Host "Extracting files to $archiveOutputDirectory" -ForegroundColor Green
+            unar $FilePath -o $archiveOutputDirectory
         }
-        $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
-        $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks
+        catch {
+            throw "Error expanding archive:`n$_"
+        }
+    
+        try {
+            Get-ChildItem $archiveOutputDirectory -Recurse | 
+	    ForEach-Object {# Arbitrarily try to remove any whitespace in file path, as this has been an issue before
+               $removeWhiteSpace = $_.FullName -replace ' ', '_'
+	       if ($removeWhiteSpace -ne $_.FullName) {
+	           Move-Item $_.FullName $removeWhiteSpace
+	       }
+            }
+            $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
+            $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks
+        }
+        catch {
+            Get-Item $archiveOutputDirectory | Remove-Item -Recurse -Force # Clean up any artifacts after error.
+            throw $_
+        }
     }
-    catch {
-        Get-Item $archiveOutputDirectory | Remove-Item -Recurse -Force # Clean up any artifacts after error.
-        throw $_
+    else {
+        
+        $vmDisk = Get-ChildItem $FilePath
+
     }
 
     try {
@@ -166,8 +175,8 @@ process {
         $iteration = 0
         $vmDisk | ForEach-Object {
             Write-Host "Attempting to attach the disk to the VM's SATA controller." -ForegroundColor Green
-            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -ForegroundColor Green
-            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -Wait -RedirectStandardOutput /dev/null
+            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.vmdk" -ForegroundColor Green
+            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.vmdk" -Wait -RedirectStandardOutput /dev/null
             $iteration++
         }
 

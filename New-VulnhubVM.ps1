@@ -97,8 +97,8 @@ begin {
         if (-not $vmdk) {
             $files | ForEach-Object {
                 $file = $_
-                $type = (file $file.FullName) -split ' '
-                $isArchive = $type[2] -eq 'archive'
+                $type = file $file.FullName
+                $isArchive = $type -like '*archive*' -or $type -like '*compressed*'
                 if ($isArchive) {
                     Write-Host "Nested archive found: " -NoNewLine
 		    Write-Host $file.FullName -ForegroundColor Green
@@ -162,6 +162,15 @@ process {
         }
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks
+
+	Write-Host "Attempting to convert the VMDK file(s) to QCOW2 to support snapshots." -ForegroundColor Green
+	$qcow2Disks = @()
+	$vmDisk | ForEach-Object {
+	    $vmdkfile = $_
+	    $qcow2file = $vmdkfile.FullName -replace 'vmdk', 'qcow2'
+	    $qcow2Disks += $qcow2file
+	    Start-Process qemu-img -ArgumentList "convert -f vmdk -O qcow2 $($vmdkfile.FullName) $qcow2file" -Wait
+	}
     }
     catch {
         Get-Item $downloadPath, $archiveOutputDirectory | Remove-Item -Recurse -Force # Clean up any artifacts after error.
@@ -173,17 +182,17 @@ process {
         Start-Process qm -ArgumentList "create $VMID $parameterString" -Wait -RedirectStandardOutput /dev/null
 
         Write-Host "Attempting to import the VMDK file(s) as a disk." -ForegroundColor Green
-        $vmDisk | ForEach-Object {
+        $qcow2Disks | ForEach-Object {
             $disk = $_
-            Write-Host "Running command: qm importdisk $VMID $($disk.FullName) $VMDiskStorageVolume --format vmdk" -ForegroundColor Green
-            Start-Process qm -ArgumentList "importdisk $VMID $($disk.FullName) $VMDiskStorageVolume --format vmdk" -Wait -RedirectStandardOutput /dev/null
+            Write-Host "Running command: qm importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -ForegroundColor Green
+            Start-Process qm -ArgumentList "importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -Wait -RedirectStandardOutput /dev/null
         }
 
         $iteration = 0
-        $vmDisk | ForEach-Object {
+        $qcow2Disks | ForEach-Object {
             Write-Host "Attempting to attach the disk to the VM's SATA controller." -ForegroundColor Green
-            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.vmdk" -ForegroundColor Green
-            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.vmdk" -Wait -RedirectStandardOutput /dev/null
+            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.qcow2" -ForegroundColor Green
+            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.qcow2" -Wait -RedirectStandardOutput /dev/null
             $iteration++
         }
 

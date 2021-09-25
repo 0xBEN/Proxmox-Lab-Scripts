@@ -147,7 +147,9 @@ process {
     wget $VulnhubURI.ToString() -q --show-progress -O $downloadPath
     $downloadedVM = Get-ChildItem $downloadPath
     try {
-        unar $downloadedVM.FullName -o $archiveOutputDirectory
+	Write-Host "Decompressing archive: $downloadedVM to $archiveOutputDirectory" -ForegroundColor Green
+        Write-Host "This may take a while depending on the size of the archive." -ForegroundColor Yellow
+	unar $downloadedVM.FullName -o $archiveOutputDirectory
     }
     catch {
         throw "Error expanding archive:`n$_"
@@ -160,6 +162,7 @@ process {
                Move-Item $_.FullName $removeWhiteSpace
            }
         }
+	Write-Host "Searching for the .vmdk disk file(s) in $archiveOutputDirectory" -ForegroundColor Green
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks
 

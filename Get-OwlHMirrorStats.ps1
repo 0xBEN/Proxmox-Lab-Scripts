@@ -1,14 +1,14 @@
 $InformationPreference = 'SilentlyContinue'
 $VerbosePreference = 'SilentlyContinue'
 $ProgressPreference = 'SilentlyContinue'
-$mirrorLogDir = '/var/log/SELKS/'
-$mirrorLog = $mirrorLogDir + 'selkslog.txt'
+$mirrorLogDir = '/var/log/OwlH/'
+$mirrorLog = $mirrorLogDir + 'OwlHlog.txt'
 $statCache = $mirrorLogDir + 'cache.clixml'
 $tap1Name = 'veth208i1' # Modify as needed based on VM ID
 $tap2Name = 'veth208i2' # Modify as needed based on VM ID
 $span0Name = 'owlhProd'
 $span1Name = 'owlhSec'
-$mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'selks*'
+$mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'owlh*'
 
 if (-not (Test-Path $mirrorLogDir)) {
     New-Item -ItemType Directory -Path $mirrorLogDir -Force | Out-Null

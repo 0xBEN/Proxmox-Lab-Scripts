@@ -184,8 +184,8 @@ process {
         $iteration = 0
         $qcowDisks | ForEach-Object {
             Write-Host "Attempting to attach the disk to the VM's SATA controller." -ForegroundColor Green
-            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.qcow2" -ForegroundColor Green
-            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration.qcow2" -Wait -RedirectStandardOutput /dev/null
+            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration" -ForegroundColor Green
+            Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):$VMID/vm-$VMID-disk-$iteration" -Wait -RedirectStandardOutput /dev/null
             $iteration++
         }
 

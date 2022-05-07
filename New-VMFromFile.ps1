@@ -110,7 +110,10 @@ begin {
     $FilePath = Resolve-Path $FilePath # In case a relative path is specified 
     if ($FilePath -like '*.iso') { throw "Creating VMs from ISO files not yet implemented." }
     elseif ($FilePath -like '*.vmdk') { $gotVmdk = $true }    
-    else { $archiveOutputDirectory = $FilePath + "-temp$(Get-Random)" }
+    else { 
+        $FilePath = Get-ChildItem $FilePath.Path
+        $archiveOutputDirectory = $FilePath.BaseName + "-temp$(Get-Random)" 
+    }
     $parameterCollection = @()
     $parameterCollection += "--ostype $GuestOSType"
     $parameterCollection += "--storage $VMDiskStorageVolume"
@@ -131,8 +134,8 @@ process {
 
     if (-not $gotVmdk) {
 
-	try {
-	    Write-Host "Extracting files to $archiveOutputDirectory" -ForegroundColor Green
+        try {
+            Write-Host "Extracting files to $archiveOutputDirectory" -ForegroundColor Green
             unar $FilePath -o $archiveOutputDirectory
         }
         catch {
@@ -141,11 +144,11 @@ process {
     
         try {
             Get-ChildItem $archiveOutputDirectory -Recurse | 
-	    ForEach-Object {# Arbitrarily try to remove any whitespace in file path, as this has been an issue before
-               $removeWhiteSpace = $_.FullName -replace ' ', '_'
-	       if ($removeWhiteSpace -ne $_.FullName) {
-	           Move-Item $_.FullName $removeWhiteSpace
-	       }
+            ForEach-Object {# Arbitrarily try to remove any whitespace in file path, as this has been an issue before
+            $removeWhiteSpace = $_.FullName -replace ' ', '_'
+                if ($removeWhiteSpace -ne $_.FullName) {
+                    Move-Item $_.FullName $removeWhiteSpace
+                }
             }
             $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
             $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks
@@ -156,9 +159,7 @@ process {
         }
     }
     else {
-        
         $vmDisk = Get-ChildItem $FilePath
-
     }
 
     try {

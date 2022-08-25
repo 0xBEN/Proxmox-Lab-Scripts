@@ -156,6 +156,7 @@ process {
     }
     
     try {
+        Write-Host "Replacing any whitespace from file paths for compatibility." -ForegroundColor Green
         Get-ChildItem $archiveOutputDirectory -Recurse | ForEach-Object { # Arbitrarily try to remove any whitespace in file path, as this has been an issue before
 	   $removeWhiteSpace = $_.FullName -replace ' ', '_'
            if ($removeWhiteSpace -ne $_.FullName) {

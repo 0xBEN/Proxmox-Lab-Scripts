@@ -107,12 +107,14 @@ begin {
 
     }
    
-    $FilePath = Resolve-Path $FilePath # In case a relative path is specified 
-    if ($FilePath -like '*.iso') { throw "Creating VMs from ISO files not yet implemented." }
-    elseif ($FilePath -like '*.vmdk') { $gotVmdk = $true }    
+    $slashType = [System.IO.Path]::DirectorySeparatorChar
+    $getFullPath = Resolve-Path $FilePath # In case a relative path is specified 
+    if ($getFullPath -like '*.iso') { throw "Creating VMs from ISO files not yet implemented." }
+    elseif ($getFullPath -like '*.vmdk') { $gotVmdk = $true }    
     else { 
-        $FilePath = Get-ChildItem $FilePath.Path
-        $archiveOutputDirectory = $FilePath.BaseName + "-temp$(Get-Random)" 
+        $targetFile = Get-ChildItem $getFullPath.Path
+        $archiveOutputDirectory = $targetFile.Directory.FullName + $slashType + $targetFile.BaseName + "-temp$(Get-Random)" 
+        $archiveOutputDirectory = $archiveOutputDirectory -replace ' ', '_'
     }
     $parameterCollection = @()
     $parameterCollection += "--ostype $GuestOSType"
@@ -136,13 +138,14 @@ process {
 
         try {
             Write-Host "Extracting files to $archiveOutputDirectory" -ForegroundColor Green
-            unar $FilePath -o $archiveOutputDirectory
+            unar $targetFile.FullName -o $archiveOutputDirectory
         }
         catch {
             throw "Error expanding archive:`n$_"
         }
     
         try {
+            Write-Host "Replacing any whitespace from file paths for compatibility." -ForegroundColor Green
             Get-ChildItem $archiveOutputDirectory -Recurse | 
             ForEach-Object {# Arbitrarily try to remove any whitespace in file path, as this has been an issue before
             $removeWhiteSpace = $_.FullName -replace ' ', '_'
@@ -152,6 +155,7 @@ process {
             }
             $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
             $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks
+            $vmDisk = $vmDisk | Sort-Object Name -Descending
         }
         catch {
             Get-Item $archiveOutputDirectory | Remove-Item -Recurse -Force # Clean up any artifacts after error.
@@ -159,7 +163,8 @@ process {
         }
     }
     else {
-        $vmDisk = Get-ChildItem $FilePath
+	# User provided path to the VMDK file explicitly
+        $vmDisk = Get-ChildItem $getFullPath
     }
 
     try {
@@ -167,25 +172,31 @@ process {
         Start-Process qm -ArgumentList "create $VMID $parameterString" -Wait -RedirectStandardOutput /dev/null
 
         Write-Host "Attempting to convert the VMDK file(s) to QCOW2 to support snapshots." -ForegroundColor Green
+        Write-Warning "If the disk files are encrypted or there are formatting issues, this will fail. Debug accordingly."
         $qcow2Disks = @()
         $vmDisk | ForEach-Object {
             $vmdkfile = $_
             $qcow2file = $vmdkfile.FullName -replace 'vmdk', 'qcow2'
             $qcow2Disks += $qcow2file
+            Write-Host "Attempting command: " -NoNewLine -ForegroundColor Magenta
+            Write-Host "qemu-img convert -f vmdk -O qcow2 $($vmdkfile.FullName) $qcow2file" -ForegroundColor Green
             Start-Process qemu-img -ArgumentList "convert -f vmdk -O qcow2 $($vmdkfile.FullName) $qcow2file" -Wait
         }
 
         Write-Host "Attempting to import the QCOW2 file(s) as a disk." -ForegroundColor Green
+        Write-Warning "If the disk files are encrypted or there are formatting issues, this will fail. Debug accordingly."
         $qcow2Disks | ForEach-Object {
             $disk = $_
-            Write-Host "Running command: qm importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -ForegroundColor Green
+            Write-Host "Running command: " -NoNewLine -ForegroundColor Magenta
+            Write-Host "qm importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -ForegroundColor Green
             Start-Process qm -ArgumentList "importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -Wait -RedirectStandardOutput /dev/null
         }
 
         $iteration = 0
         $qcowDisks | ForEach-Object {
             Write-Host "Attempting to attach the disk to the VM's SATA controller." -ForegroundColor Green
-            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -ForegroundColor Green
+            Write-Host "Running command: " -NoNewLine -ForegroundColor Magenta
+            Write-Host "qm set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -ForegroundColor Green
             Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -Wait -RedirectStandardOutput /dev/null
             $iteration++
         }

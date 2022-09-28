@@ -8,6 +8,13 @@ $mirrorLogDir = '/var/log/OwlH/'
 $mirrorLog = $mirrorLogDir + 'OwlHlog.txt'
 $statCache = $mirrorLogDir + 'cache.clixml'
 
+# Prod switch
+# Update according to your environment
+$prodSwitch = 'vmbr0'
+# Vuln switch
+# Update according to your environment
+$vulnSwitch = 'vmbr1'
+
 # Sniff interface 1
 # Modify as needed based on VM ID
 $tap1Name = 'veth208i1'
@@ -40,11 +47,15 @@ if ($mirrorStats.count -lt 2) {
     # Recreate the mirrors and refresh data since there should always be a minimum of two
     # This is based on my lab environment, where I have two switches
     # https://benheater.com/proxmox-lab-wazuh-siem-and-nids/
-    ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge vmbr0 mirrors=@m | Out-Null
-    ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=$span1Name select-all=true output-port=@p -- set bridge vmbr1 mirrors=@m | Out-Null
+    ovs-vsctl clear brge $prodSwitch mirrors 2>&1 > /dev/null
+    ovs-vsctl clear brge $vulnSwitch mirrors 2>&1 > /dev/null
+    ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
+    ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=$span1Name select-all=true output-port=@p -- set bridge $vulnSwitch mirrors=@m | Out-Null
     Start-Sleep -Seconds 5
     $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv
     if ($mirrorStats.Count -lt 2) {
+        ovs-vsctl clear brge $prodSwitch mirrors 2>&1 > /dev/null
+        ovs-vsctl clear brge $vulnSwitch mirrors 2>&1 > /dev/null
         Write-Output 'Stopping script, as the mirror count remains less than 2 after initial attempt to restart.' > $mirrorLog
     }
 }
@@ -56,6 +67,7 @@ else {
     
     # $mirrorStats will contain the CSV output from ovs-vsctl converted to object notation
     # Check the number of objects in the array
+    # I'm pretty certain I added this logic in at one point cause I was testing mirroring on a third switch and didn't want the script to destroy break it
     if ($mirrorStats.count -gt $cacheStats.count) {
         Write-Output 'No action taken, as the number of current mirror ports exceeds that in the cache.' > $mirrorLog
         $mirrorStats | Export-Clixml $statCache -Force
@@ -80,8 +92,10 @@ else {
 	    # The cached bytes and the current span bytes are either non-existent or equal to the cached bytes
 	    # Recreate the mirror
             Write-Output 'Recreated mirrors as current span TX data was equal to or older than that in the cache.' > $mirrorLog
-            ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge vmbr0 mirrors=@m | Out-Null
-            ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=span1Name select-all=true output-port=@p -- set bridge vmbr1 mirrors=@m | Out-Null
+	    ovs-vsctl clear brge $prodSwitch mirrors 2>&1 > /dev/null
+            ovs-vsctl clear brge $vulnSwitch mirrors 2>&1 > /dev/null
+            ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
+            ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=span1Name select-all=true output-port=@p -- set bridge $vulnSwitch mirrors=@m | Out-Null
             Start-Sleep -Seconds 5
 	    $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv
 	    $mirrorStats | Export-Clixml $statCache -Force

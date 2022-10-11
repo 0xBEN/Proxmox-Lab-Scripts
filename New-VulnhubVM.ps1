@@ -143,12 +143,12 @@ begin {
 }
 process {
 
-    Write-Host "Downloading VM from Vulnhub. Please be patient..." -ForegroundColor Green
+    Write-Host "[+] Downloading VM from Vulnhub. Please be patient...`n" -ForegroundColor Green
     wget $VulnhubURI.ToString() -q --show-progress -O $downloadPath
     $downloadedVM = Get-ChildItem $downloadPath
     try {
-	Write-Host "Decompressing archive: $downloadedVM to $archiveOutputDirectory" -ForegroundColor Green
-        Write-Host "This may take a while depending on the size of the archive." -ForegroundColor Yellow
+	Write-Host "[+] Decompressing archive: $downloadedVM to $archiveOutputDirectory`n" -ForegroundColor Green
+        Write-Host "[!] This may take a while depending on the size of the archive.`n" -ForegroundColor Yellow
 	unar $downloadedVM.FullName -o $archiveOutputDirectory
     }
     catch {
@@ -156,18 +156,18 @@ process {
     }
     
     try {
-        Write-Host "Replacing any whitespace from file paths for compatibility." -ForegroundColor Green
+        Write-Host "[+] Replacing any whitespace from file paths for compatibility.`n" -ForegroundColor Green
         Get-ChildItem $archiveOutputDirectory -Recurse | ForEach-Object { # Arbitrarily try to remove any whitespace in file path, as this has been an issue before
 	   $removeWhiteSpace = $_.FullName -replace ' ', '_'
            if ($removeWhiteSpace -ne $_.FullName) {
                Move-Item $_.FullName $removeWhiteSpace
            }
         }
-	Write-Host "Searching for the .vmdk disk file(s) in $archiveOutputDirectory" -ForegroundColor Green
+	Write-Host "[+] Searching for the .vmdk disk file(s) in $archiveOutputDirectory`n" -ForegroundColor Green
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory
         $vmDisk = Find-VMDK -Directory $archiveOutputDirectory # Rediscover the renamed disks
 
-	Write-Host "Attempting to convert the VMDK file(s) to QCOW2 to support snapshots." -ForegroundColor Green
+	Write-Host "[+] Attempting to convert the VMDK file(s) to QCOW2 to support snapshots.`n" -ForegroundColor Green
 	$qcow2Disks = @()
 	$vmDisk | ForEach-Object {
 	    $vmdkfile = $_
@@ -182,28 +182,28 @@ process {
     }
 
     try {
-        Write-Host "Attempting to create the VM with the following command: qm create $VMID $parameterString." -ForegroundColor Green
+        Write-Host "[+] Attempting to create the VM with the following command: qm create $VMID $parameterString.`n" -ForegroundColor Green
         Start-Process qm -ArgumentList "create $VMID $parameterString" -Wait -RedirectStandardOutput /dev/null
 
-        Write-Host "Attempting to import the QCOW2 file(s) as a disk." -ForegroundColor Green
+        Write-Host "[+] Attempting to import the QCOW2 file(s) as a disk.`n" -ForegroundColor Green
         $qcow2Disks | ForEach-Object {
             $disk = $_
-            Write-Host "Running command: qm importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -ForegroundColor Green
+            Write-Host "[+] Running command: qm importdisk $VMID $disk $VMDiskStorageVolume --format qcow2`n" -ForegroundColor Green
             Start-Process qm -ArgumentList "importdisk $VMID $disk $VMDiskStorageVolume --format qcow2" -Wait -RedirectStandardOutput /dev/null
         }
 
         $iteration = 0
         $qcow2Disks | ForEach-Object {
-            Write-Host "Attempting to attach the disk to the VM's SATA controller." -ForegroundColor Green
-            Write-Host "Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -ForegroundColor Green
+            Write-Host "[+] Attempting to attach the disk to the VM's SATA controller.`n" -ForegroundColor Green
+            Write-Host "[+] Running command: qm set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration`n" -ForegroundColor Green
             Start-Process qm -ArgumentList "set $VMID --sata$iteration $($VMDiskStorageVolume):vm-$VMID-disk-$iteration" -Wait -RedirectStandardOutput /dev/null
             $iteration++
         }
 
-        Write-Host "Setting sata0 as the boot device." -ForegroundColor Green
+        Write-Host "[+] Setting sata0 as the boot device.`n" -ForegroundColor Green
         Start-Process qm -ArgumentList "set $VMID --boot=`"order=sata0`"" -Wait -RedirectStandardOutput /dev/null
 
-        Write-Host "All commands completed successfully" -ForegroundColor Green
+        Write-Host "[+] All commands completed successfully`n" -ForegroundColor Green
     }
     catch {
         throw "Command failed with the following error:`n$_"
@@ -213,7 +213,7 @@ process {
 end {
 
     if ((Test-Path $downloadPath -ErrorAction SilentlyContinue) -or (Test-Path $archiveOutputDirectory -ErrorAction SilentlyContinue)) {
-        Write-Host "Removing any files created by the script." -ForegroundColor Green
+        Write-Host "[+] Removing any files created by the script.`n" -ForegroundColor Green
         Remove-Item $downloadPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null   
         Remove-Item $archiveOutputDirectory -Recurse -Force -ErrorAction SilentlyContinue | Out-Null   
     }

@@ -35,11 +35,13 @@ $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Obje
 # Get the current running guests
 # Use this as a baseline to check if any guests have started or stopped
 # Mirrors need to be reconfigured if any hosts are started or stopped
-$vms = qm list | grep running
-$vms = $vms -replace '^\s{1,}', '' # Get rid of whitespac at the star of the string
-$containers = pct list | grep running
+$cachedGuestIDs = Get-Content $guestCache
+$vms = /usr/sbin/qm list | grep running
+$vms = $vms -replace '^\s{1,}', '' # Get rid of whitespace at the star of the string
+$containers = /usr/sbin/pct list | grep running
 $guests = $vms + $containers
 $guestIDs = $guests.ForEach({$_.Split(' ')[0]})
+$guestIDs > $guestCache
 
 # Create log dirs/files as needed
 if (-not (Test-Path $mirrorLogDir)) {
@@ -63,15 +65,15 @@ if ($mirrorStats.count -lt 2) {
     # Recreate the mirrors and refresh data since there should always be a minimum of two
     # This is based on my lab environment, where I have two switches
     # https://benheater.com/proxmox-lab-wazuh-siem-and-nids/
-    ovs-vsctl clear brge $prodSwitch mirrors 2>&1 > /dev/null
-    ovs-vsctl clear brge $vulnSwitch mirrors 2>&1 > /dev/null
+    ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
+    ovs-vsctl clear Brige $vulnSwitch mirrors 2>&1 > /dev/null
     ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
     ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=$span1Name select-all=true output-port=@p -- set bridge $vulnSwitch mirrors=@m | Out-Null
     Start-Sleep -Seconds 5
-    $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv
+    $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'owlh*'
     if ($mirrorStats.Count -lt 2) {
-        ovs-vsctl clear brge $prodSwitch mirrors 2>&1 > /dev/null
-        ovs-vsctl clear brge $vulnSwitch mirrors 2>&1 > /dev/null
+        ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
+        ovs-vsctl clear Brige $vulnSwitch mirrors 2>&1 > /dev/null
         Write-Output 'Stopping script, as the mirror count remains less than 2 after initial attempt to restart.' > $mirrorLog
     }
     
@@ -93,7 +95,6 @@ else {
     else {
     
         # Take both SPAN port objects and compare them individually against the current and cached I/O
-	$cachedGuestIDs = Get-Content $guestCache
         $currentSpan0 = $mirrorStats | Where-Object {$_.name -match $span0Name}
         $currentSpan1 = $mirrorStats | Where-Object {$_.name -match $span1Name}
         $cacheSpan0 = $cacheStats | Where-Object {$_.name -match $span0Name}
@@ -103,15 +104,15 @@ else {
         $cacheSpan0txData = $cacheSpan0.statistics -replace '{' -replace '}' -split ', ' | ConvertFrom-StringData
         $cacheSpan1txData = $cacheSpan1.statistics -replace '{' -replace '}' -split ', ' | ConvertFrom-StringData
 	
-	if ($guestIDs.Count -ne $cachedGuestIDs.count) {
+	if ($guestIDs.Count -ne $cachedGuestIDs.Count) {
 	    # Reconfigure port mirrors because the number of guests is greater or less than the cached amount
-	    Write-Output 'A guest or guests have either been added/removed/started/stopped between checks. Mirrors will be reconfigured.'
-	    ovs-vsctl clear brge $prodSwitch mirrors 2>&1 > /dev/null
-            ovs-vsctl clear brge $vulnSwitch mirrors 2>&1 > /dev/null
+	    Write-Output 'A guest or guests have either been added/removed/started/stopped between checks. Mirrors will be reconfigured.' > $mirrorLog
+	    ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
+            ovs-vsctl clear Brige $vulnSwitch mirrors 2>&1 > /dev/null
             ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
-            ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=span1Name select-all=true output-port=@p -- set bridge $vulnSwitch mirrors=@m | Out-Null
+            ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=$span1Name select-all=true output-port=@p -- set bridge $vulnSwitch mirrors=@m | Out-Null
             Start-Sleep -Seconds 5
-	    $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv
+	    $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'owlh*'
 	    $mirrorStats | Export-Clixml $statCache -Force	    
 	}
 	else {
@@ -125,12 +126,12 @@ else {
 	        # The cached bytes and the current span bytes are either non-existent or equal to the cached bytes
 	        # Recreate the mirror
                 Write-Output 'Recreated mirrors as current span TX data was equal to or older than that in the cache.' > $mirrorLog
-	        ovs-vsctl clear brge $prodSwitch mirrors 2>&1 > /dev/null
-                ovs-vsctl clear brge $vulnSwitch mirrors 2>&1 > /dev/null
+	        ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
+                ovs-vsctl clear Brige $vulnSwitch mirrors 2>&1 > /dev/null
                 ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
-                ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=span1Name select-all=true output-port=@p -- set bridge $vulnSwitch mirrors=@m | Out-Null
+                ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=$span1Name select-all=true output-port=@p -- set bridge $vulnSwitch mirrors=@m | Out-Null
                 Start-Sleep -Seconds 5
-	        $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv
+	        $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'owlh*'
 	        $mirrorStats | Export-Clixml $statCache -Force
 	    }
 	    

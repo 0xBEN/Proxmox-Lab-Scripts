@@ -94,9 +94,7 @@ else {
 	    # Reconfigure port mirrors because the number of guests is greater or less than the cached amount
 	    Write-Output 'A guest or guests have either been added/removed/started/stopped between checks. Mirrors will be reconfigured.' > $mirrorLog
 	    ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
-            ovs-vsctl clear Brige $vulnSwitch mirrors 2>&1 > /dev/null
             ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
-            ovs-vsctl -- --id=@p get port $tap2Name -- --id=@m create mirror name=$span1Name select-all=true output-port=@p -- set bridge $vulnSwitch mirrors=@m | Out-Null
             Start-Sleep -Seconds 5
 	    $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'owlh*'
 	    $mirrorStats | Export-Clixml $statCache -Force	    

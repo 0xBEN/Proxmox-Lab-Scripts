@@ -9,16 +9,16 @@ $mirrorLog = $mirrorLogDir + 'OwlHlog.txt'
 $statCache = $mirrorLogDir + 'cache.clixml'
 $guestCache = $mirrorLogDir + 'guest-cache.txt'
 
-# Prod switch
+# Lab switch
 # Update according to your environment
-$prodSwitch = 'vmbr0'
+$labSwitch = 'vmbr0'
 
 # Sniff interface 1
 # Modify as needed based on VM ID
 $tap1Name = 'veth208i1'
 
 # Span port names for Open vSwitch
-$span0Name = 'owlhProd'
+$span0Name = 'owlhLab'
 
 # Get the current I/O stats for the port mirrors
 # Use this as a baseline to check for ongoing I/O
@@ -58,12 +58,12 @@ if ($mirrorStats.count -lt 1) {
     # Recreate the mirrors and refresh data since there should always be a minimum of two
     # This is based on my lab environment, where I have two switches
     # https://benheater.com/proxmox-lab-wazuh-siem-and-nids/
-    ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
-    ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
+    ovs-vsctl clear Brige $labSwitch mirrors 2>&1 > /dev/null
+    ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $labSwitch mirrors=@m | Out-Null
     Start-Sleep -Seconds 5
     $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'owlh*'
     if ($mirrorStats.Count -lt 1) {
-        ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
+        ovs-vsctl clear Brige $labSwitch mirrors 2>&1 > /dev/null
         Write-Output 'Stopping script, as the mirror count remains less than 1 after initial attempt to restart.' > $mirrorLog
     }
     
@@ -93,8 +93,8 @@ else {
 	if ($guestIDs.Count -ne $cachedGuestIDs.Count) {
 	    # Reconfigure port mirrors because the number of guests is greater or less than the cached amount
 	    Write-Output 'A guest or guests have either been added/removed/started/stopped between checks. Mirrors will be reconfigured.' > $mirrorLog
-	    ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
-            ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
+	    ovs-vsctl clear Brige $labSwitch mirrors 2>&1 > /dev/null
+            ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $labSwitch mirrors=@m | Out-Null
             Start-Sleep -Seconds 5
 	    $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'owlh*'
 	    $mirrorStats | Export-Clixml $statCache -Force	    
@@ -110,8 +110,8 @@ else {
 	        # The cached bytes and the current span bytes are either non-existent or equal to the cached bytes
 	        # Recreate the mirror
                 Write-Output 'Recreated mirrors as current span TX data was equal to or older than that in the cache.' > $mirrorLog
-	        ovs-vsctl clear Brige $prodSwitch mirrors 2>&1 > /dev/null
-                ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $prodSwitch mirrors=@m | Out-Null
+	        ovs-vsctl clear Brige $labSwitch mirrors 2>&1 > /dev/null
+                ovs-vsctl -- --id=@p get port $tap1Name -- --id=@m create mirror name=$span0Name select-all=true output-port=@p -- set bridge $labSwitch mirrors=@m | Out-Null
                 Start-Sleep -Seconds 5
 	        $mirrorStats = ovs-vsctl --format=csv list mirror | ConvertFrom-Csv | Where-Object name -like 'owlh*'
 	        $mirrorStats | Export-Clixml $statCache -Force

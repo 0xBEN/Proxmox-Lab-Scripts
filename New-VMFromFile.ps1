@@ -73,15 +73,27 @@ Param (
     $MemoryMiB
 )
 begin {
-     
+
     if (-not (which unar)) {
         throw "This script requires the program, unar, which is a single archive decompression tool that works on a variety or archive types.`nPlease install that program and re-run the script."
     }
-    
+
     function Find-VMDK ($Directory) {
-        
+
         $files = Get-ChildItem $Directory -Recurse
-        $vmdk = $files | Where-Object {$_.Extension -eq '.vmdk'}
+        $vmdk = $files | Where-Object {$_.Extension -eq '.vmdk'} | ForEach-Object {
+            $file = $_
+            if ($file.FullName -like '* *') {
+                # Replace spaces in file name
+                $newName = $file.FullName -replace ' ', '_'
+                Move-Item $file.FullName $newName
+                $newFile = Get-ChildItem $newName
+                return $newFile
+            }
+            else {
+                return $file
+            }
+        }
         if (-not $vmdk) {
             $files | ForEach-Object {
                 $file = $_
@@ -106,31 +118,31 @@ begin {
         }
 
     }
-   
+
     $slashType = [System.IO.Path]::DirectorySeparatorChar
-    $getFullPath = Resolve-Path $FilePath # In case a relative path is specified 
+    $getFullPath = Resolve-Path $FilePath # In case a relative path is specified
     if ($getFullPath -like '*.iso') { throw "Creating VMs from ISO files not yet implemented." }
-    elseif ($getFullPath -like '*.vmdk') { $gotVmdk = $true }    
-    else { 
+    elseif ($getFullPath -like '*.vmdk') { $gotVmdk = $true }
+    else {
         $targetFile = Get-ChildItem $getFullPath.Path
-        $archiveOutputDirectory = $targetFile.Directory.FullName + $slashType + $targetFile.BaseName + "-temp$(Get-Random)" 
+        $archiveOutputDirectory = $targetFile.Directory.FullName + $slashType + $targetFile.BaseName + "-temp$(Get-Random)"
         $archiveOutputDirectory = $archiveOutputDirectory -replace ' ', '_'
     }
     $parameterCollection = @()
     $parameterCollection += "--ostype $GuestOSType"
     $parameterCollection += "--storage $VMDiskStorageVolume"
-    if ($PSBoundParameters['NetworkBridge']) { 
+    if ($PSBoundParameters['NetworkBridge']) {
         if ($PSBoundParameters['VlanTag']) {
-            $parameterCollection += "--net0 model=virtio,bridge=$NetworkBridge,firewall=0,tag=$VlanTag"         
+            $parameterCollection += "--net0 model=virtio,bridge=$NetworkBridge,firewall=0,tag=$VlanTag"
         }
         else {
-            $parameterCollection += "--net0 model=virtio,bridge=$NetworkBridge,firewall=0" 
+            $parameterCollection += "--net0 model=virtio,bridge=$NetworkBridge,firewall=0"
         }
     }
     if ($PSBoundParameters['VMName']) { $parameterCollection += "--name $VMName" }
-    if ($PSBoundParameters['MemoryMiB']) { $parameterCollection += "--memory $MemoryMiB" }        
-    $parameterString = $parameterCollection -join ' '    
-    
+    if ($PSBoundParameters['MemoryMiB']) { $parameterCollection += "--memory $MemoryMiB" }
+    $parameterString = $parameterCollection -join ' '
+
 }
 process {
 
@@ -143,10 +155,10 @@ process {
         catch {
             throw "Error expanding archive:`n$_"
         }
-    
+
         try {
             Write-Host "Replacing any whitespace from file paths for compatibility." -ForegroundColor Green
-            Get-ChildItem $archiveOutputDirectory -Recurse | 
+            Get-ChildItem $archiveOutputDirectory -Recurse |
             ForEach-Object {# Arbitrarily try to remove any whitespace in file path, as this has been an issue before
             $removeWhiteSpace = $_.FullName -replace ' ', '_'
                 if ($removeWhiteSpace -ne $_.FullName) {
@@ -163,7 +175,7 @@ process {
         }
     }
     else {
-	# User provided path to the VMDK file explicitly
+        # User provided path to the VMDK file explicitly
         $vmDisk = Get-ChildItem $getFullPath
     }
 
@@ -215,8 +227,7 @@ end {
 
     if (Test-Path $archiveOutputDirectory -ErrorAction SilentlyContinue) {
         Write-Host "Removing any files created by the script." -ForegroundColor Green
-        Remove-Item $archiveOutputDirectory -Recurse -Force -ErrorAction SilentlyContinue | Out-Null   
+        Remove-Item $archiveOutputDirectory -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
     }
 
 }
- 

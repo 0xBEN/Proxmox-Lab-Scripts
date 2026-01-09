@@ -91,17 +91,28 @@ begin {
     }
     
     function Find-VMDK ($Directory) {
-        
+
         $files = Get-ChildItem $Directory -Recurse
-        $vmdk = $files | Where-Object {$_.Extension -eq '.vmdk'}
+        $vmdk = $files | Where-Object {$_.Extension -eq '.vmdk'} | ForEach-Object {
+            $file = $_
+            if ($file.FullName -like '* *') {
+                # Replace spaces in file name
+                $newName = $file.FullName -replace ' ', '_'
+                Move-Item $file.FullName $newName
+                $newFile = Get-ChildItem $newName
+                return $newFile
+            }
+            else {
+                return $file
+            }
+        }
         if (-not $vmdk) {
             $files | ForEach-Object {
                 $file = $_
                 $type = file $file.FullName
                 $isArchive = $type -like '*archive*' -or $type -like '*compressed*'
                 if ($isArchive) {
-                    Write-Host "Nested archive found: " -NoNewLine
-		    Write-Host $file.FullName -ForegroundColor Green
+                    Write-Host $isArchive.FullName -ForegroundColor Green
                     $archiveFileFound = $file
                 }
             }
@@ -119,7 +130,7 @@ begin {
         }
 
     }
-    
+	
     if (-not [System.IO.Path]::EndsInDirectorySeparator($DownloadDirectory)) { $DownloadDirectory = $DownloadDirectory + '/'  }
     $fileName = $VulnhubURI.Segments[-1] # Define the download file name based on the URI provided.
     if ($fileName -like '*.iso') { throw "Creating VMs from ISO files not yet implemented." }
